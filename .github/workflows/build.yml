@@ -11,6 +11,7 @@ jobs:
     name: 打包 (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false  # 一个平台失败不影响其他平台
       matrix:
         include:
           - os: windows-latest
@@ -39,7 +40,7 @@ jobs:
 
       - name: 安装 Linux 依赖 (Qt)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libegl1 libxkbcommon0 libgl1-mesa-glx
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libxkbcommon0 libgl1 libopengl0
 
       - name: PyInstaller 打包
         run: |
