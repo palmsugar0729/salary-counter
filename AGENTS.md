@@ -62,14 +62,24 @@ codes/
 - [x] 项目结构创建
 - [x] v0.1 代码实现完成
 - [x] PyInstaller 打包可用
+- [x] v0.1.1 体验改进（清除全部、费率修正、双击编辑）
 
 ## 构建与打包
 
-双击 `codes/build.bat` 即可重新生成 `codes/dist/SalaryCounter.exe`（约 60MB，无需 Python 环境即可运行）。
+双击 `codes/build.bat` 即可重新生成 exe。或手动指定版本名：
+
+```bash
+cd codes
+python -m PyInstaller --onefile --windowed --name SalaryCounter-vX.X main.py
+```
+
+产物在 `codes/dist/`。详见 `notes/pyinstaller-packaging.md`。
 
 ## 参考资源
 
 - `docs/2026-05-31-需求讨论记录.md` — 完整需求讨论，含 Excel 格式解析
 - `docs/PRD.md` — 产品需求文档
+- `docs/2026-06-01-会话记录-v0.1.1改进.md` — v0.1.1 改进全程记录
 - `assets/design/screenshot_original-effect.png` — 目标效果图
 - `assets/reference/2026沐晨_4月工资结算表-梁筱.xlsx` — 参考 Excel 文件
+- `notes/pyinstaller-packaging.md` — PyInstaller 打包学习笔记
