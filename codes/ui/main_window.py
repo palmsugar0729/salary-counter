@@ -36,6 +36,7 @@ class MainWindow(QWidget):
 
         self._data = MonthData()
         self._current_file: str | None = None
+        self._editing_index: int | None = None  # None=新增模式，数字=编辑对应行
 
         self._setup_ui()
         self._connect_signals()
@@ -95,7 +96,16 @@ class MainWindow(QWidget):
         self.del_btn.setMinimumWidth(100)
         btn_row.addWidget(self.del_btn)
 
+        self.clear_btn = QPushButton("🗑 清除全部")
+        self.clear_btn.setMinimumWidth(100)
+        self.clear_btn.setStyleSheet("QPushButton { color: #c0392b; }")
+        btn_row.addWidget(self.clear_btn)
+
         btn_row.addStretch()
+
+        self.cancel_edit_btn = QPushButton("取消编辑")
+        self.cancel_edit_btn.setVisible(False)
+        btn_row.addWidget(self.cancel_edit_btn)
 
         self.load_check = QCheckBox("启动时自动加载上次数据")
         self.load_check.setChecked(True)
@@ -140,9 +150,12 @@ class MainWindow(QWidget):
     def _connect_signals(self):
         self.add_btn.clicked.connect(self._on_add)
         self.del_btn.clicked.connect(self._on_delete)
+        self.clear_btn.clicked.connect(self._on_clear_all)
+        self.cancel_edit_btn.clicked.connect(self._on_cancel_edit)
         self.save_btn.clicked.connect(self._on_save)
         self.export_btn.clicked.connect(self._on_export)
         self.name_edit.textChanged.connect(self._on_name_changed)
+        self.table.cellDoubleClicked.connect(self._on_row_double_clicked)
 
     # ── 槽函数 ────────────────────────────────────────
 
@@ -161,14 +174,22 @@ class MainWindow(QWidget):
             class_type=class_type,
             note=self.note_edit.text().strip(),
         )
-        self._data.records.append(rec)
+
+        if self._editing_index is not None:
+            # 更新模式
+            self._data.records[self._editing_index] = rec
+            self._exit_edit_mode()
+        else:
+            # 新增模式
+            self._data.records.append(rec)
+
         self._refresh_table()
 
         # 检查是否为新班级类型
         if class_type not in CLASS_RATES:
             reply = QMessageBox.question(
                 self, "新班级类型",
-                f"“{class_type}”不在预设费率中，当前默认时薪 {rec.rate} 元/时。\n"
+                f"「{class_type}」不在预设费率中，当前默认时薪 {rec.rate} 元/时。\n"
                 f"是否将此班级类型添加到配置？（需要修改 config.py）",
             )
             if reply == QMessageBox.StandardButton.Yes:
@@ -179,9 +200,55 @@ class MainWindow(QWidget):
         rows = set(idx.row() for idx in self.table.selectedIndexes())
         if not rows:
             return
+        sorted_recs = self._data.sorted_records()
         for row in sorted(rows, reverse=True):
-            del self._data.records[row]
+            rec = sorted_recs[row]
+            try:
+                self._data.records.remove(rec)
+            except ValueError:
+                pass
         self._refresh_table()
+
+    def _on_clear_all(self):
+        if not self._data.records:
+            return
+        reply = QMessageBox.question(
+            self, "确认清除",
+            f"确定要清除全部 {len(self._data.records)} 条记录吗？\n此操作不可撤销。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._data.records.clear()
+            self._refresh_table()
+
+    def _on_row_double_clicked(self, row: int, _col: int):
+        if row < 0 or row >= len(self._data.records):
+            return
+        rec = self._data.sorted_records()[row]
+        try:
+            self._editing_index = self._data.records.index(rec)
+        except ValueError:
+            return
+
+        self.date_edit.setDate(rec.date)
+        self.time_edit.setTime(rec.start_time)
+        self.hours_spin.setValue(rec.hours)
+        self.class_combo.setEditText(rec.class_type)
+        self.note_edit.setText(rec.note)
+
+        self.add_btn.setText("✎ 更新")
+        self.add_btn.setStyleSheet("QPushButton { font-weight: bold; color: #2980b9; }")
+        self.cancel_edit_btn.setVisible(True)
+
+    def _exit_edit_mode(self):
+        self._editing_index = None
+        self.add_btn.setText("添加")
+        self.add_btn.setStyleSheet("")
+        self.cancel_edit_btn.setVisible(False)
+
+    def _on_cancel_edit(self):
+        self._exit_edit_mode()
+
 
     def _on_save(self):
         path, _ = QFileDialog.getSaveFileName(
