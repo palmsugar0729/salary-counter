@@ -116,7 +116,7 @@ git push origin v0.1.1
 | 检出代码 | checkout 当前 tag 的代码 |
 | 安装 Python 3.11 | 三个平台统一版本 |
 | pip install -r requirements.txt | PySide6 + openpyxl + PyInstaller |
-| Linux 额外依赖 | `libegl1 libxkbcommon0 libgl1-mesa-glx`（Qt 运行时） |
+| Linux 额外依赖 | `libegl1 libxkbcommon0 libgl1 libopengl0`（Qt 运行时，Ubuntu 24.04） |
 | PyInstaller 打包 | 各平台各自打出可执行文件 |
 | macOS 额外步骤 | `.app` 打包成 zip（方便分发） |
 | 上传产物 | 作为 workflow artifact 暂存 |
@@ -133,6 +133,27 @@ SalaryCounter-v0.1.1-linux
 ### 没有 Mac？用 GitHub Actions 就行
 
 这就是前面说的"没有 Mac 也能打包 Mac 版"的方案——完全免费，代码推送后全自动完成。打完的包会出现在仓库的 Releases 页面，直接下载分发给别人。
+
+### 踩坑记录
+
+**坑 1：Ubuntu 24.04 包名变更**
+
+`ubuntu-latest` 现在是 24.04，`libgl1-mesa-glx` 已被移除，需改为 `libgl1 libopengl0`。
+
+**坑 2：`fail-fast: true` 连锁取消**
+
+默认情况下矩阵策略中一个作业失败会取消所有其他作业。加 `fail-fast: false` 让各平台独立运行。
+
+**坑 3：重跑 CI 需要重建 tag**
+
+修复 workflow 后，已推送的 tag 不会自动重跑。需删除后重建：
+
+```bash
+git tag -d v0.1.1
+git push origin --delete v0.1.1
+git tag v0.1.1
+git push origin v0.1.1
+```
 
 ## 扩展阅读
 
