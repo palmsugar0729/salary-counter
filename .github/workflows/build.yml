@@ -1,0 +1,80 @@
+name: 多平台打包
+
+on:
+  push:
+    tags:
+      - 'v*'          # 推送 v0.1.1 等 tag 时触发
+  workflow_dispatch:    # 也支持手动触发
+
+jobs:
+  build:
+    name: 打包 (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            ext: .exe
+            pyinstaller_flags: --onefile --windowed
+          - os: macos-latest
+            ext: .app
+            pyinstaller_flags: --onefile --windowed
+          - os: ubuntu-latest
+            ext: ""
+            pyinstaller_flags: --onefile
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r codes/requirements.txt
+
+      - name: 安装 Linux 依赖 (Qt)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libxkbcommon0 libgl1-mesa-glx
+
+      - name: PyInstaller 打包
+        run: |
+          cd codes
+          python -m PyInstaller ${{ matrix.pyinstaller_flags }} --name "SalaryCounter-${{ github.ref_name }}" main.py
+        shell: bash
+
+      - name: 打包 macOS .app 为 zip
+        if: runner.os == 'macOS'
+        run: |
+          cd codes/dist
+          zip -r "SalaryCounter-${{ github.ref_name }}-macos.zip" "SalaryCounter-${{ github.ref_name }}.app"
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: SalaryCounter-${{ github.ref_name }}-${{ runner.os }}
+          path: |
+            codes/dist/SalaryCounter-${{ github.ref_name }}*.*
+
+  release:
+    name: 发布 Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 下载所有产物
+        uses: actions/download-artifact@v4
+
+      - name: 创建 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          files: |
+            **/SalaryCounter-*
+          generate_release_notes: true

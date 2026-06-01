@@ -87,6 +87,53 @@ python -m PyInstaller SalaryCounter.spec
 
 .spec 文件可配置：隐式导入补丁、数据文件打包、图标、UPX 压缩等。
 
+## 跨平台与 GitHub Actions 自动打包
+
+### 为什么不能跨平台编译
+
+PyInstaller **不支持交叉编译**——在 Windows 上只能打 Windows exe，在 macOS 上只能打 .app，在 Linux 上只能打 Linux 可执行文件。原因是 PyInstaller 需要收集当前平台的系统库（DLL / dylib / .so），这些文件在不同 OS 之间不通用。
+
+### 用 GitHub Actions 免费打包全平台
+
+GitHub Actions 提供**免费的 Windows、macOS、Linux 虚拟环境**，推送 tag 即可自动打包三个平台。
+
+#### 触发方式
+
+```bash
+# 本地打 tag 并推送即可触发
+git tag v0.1.1
+git push origin v0.1.1
+```
+
+也可以在 GitHub 网页上手动触发（`workflow_dispatch`）。
+
+#### 工作流文件
+
+`.github/workflows/build.yml` 会在推送 `v*` tag 时：
+
+| 步骤 | 说明 |
+|------|------|
+| 检出代码 | checkout 当前 tag 的代码 |
+| 安装 Python 3.11 | 三个平台统一版本 |
+| pip install -r requirements.txt | PySide6 + openpyxl + PyInstaller |
+| Linux 额外依赖 | `libegl1 libxkbcommon0 libgl1-mesa-glx`（Qt 运行时） |
+| PyInstaller 打包 | 各平台各自打出可执行文件 |
+| macOS 额外步骤 | `.app` 打包成 zip（方便分发） |
+| 上传产物 | 作为 workflow artifact 暂存 |
+| 创建 Release | 自动生成 GitHub Release 并挂载三个平台的下载链接 |
+
+#### 产物命名
+
+```
+SalaryCounter-v0.1.1-windows.exe
+SalaryCounter-v0.1.1-macos.zip
+SalaryCounter-v0.1.1-linux
+```
+
+### 没有 Mac？用 GitHub Actions 就行
+
+这就是前面说的"没有 Mac 也能打包 Mac 版"的方案——完全免费，代码推送后全自动完成。打完的包会出现在仓库的 Releases 页面，直接下载分发给别人。
+
 ## 扩展阅读
 
 - [PyInstaller 官方文档](https://pyinstaller.org/en/stable/)
