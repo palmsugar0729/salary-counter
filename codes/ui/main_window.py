@@ -25,7 +25,8 @@ from PySide6.QtWidgets import (
 from config import CLASS_RATES
 from excel_exporter import export
 from models import MonthData, Record
-from storage import load, save
+from storage import load, save, load_rates, save_rates
+from ui.rate_dialog import RateDialog
 
 
 class MainWindow(QWidget):
@@ -40,6 +41,7 @@ class MainWindow(QWidget):
 
         self._setup_ui()
         self._connect_signals()
+        self._load_persisted_rates()
 
     # ── UI 搭建 ──────────────────────────────────────
 
@@ -79,6 +81,11 @@ class MainWindow(QWidget):
         self.class_combo.addItems(list(CLASS_RATES.keys()))
         form.addWidget(self.class_combo)
 
+        self.manage_rates_btn = QPushButton("管理")
+        self.manage_rates_btn.setMaximumWidth(50)
+        self.manage_rates_btn.setToolTip("管理班级费率")
+        form.addWidget(self.manage_rates_btn)
+
         form.addWidget(QLabel("备注"))
         self.note_edit = QLineEdit()
         self.note_edit.setMaximumWidth(120)
@@ -113,6 +120,10 @@ class MainWindow(QWidget):
 
         self.save_btn = QPushButton("保存数据")
         btn_row.addWidget(self.save_btn)
+
+        self.load_btn = QPushButton("加载数据")
+        self.load_btn.setToolTip("加载之前保存的历史记录")
+        btn_row.addWidget(self.load_btn)
 
         self.export_btn = QPushButton("导出 Excel")
         self.export_btn.setMinimumWidth(100)
@@ -153,9 +164,11 @@ class MainWindow(QWidget):
         self.clear_btn.clicked.connect(self._on_clear_all)
         self.cancel_edit_btn.clicked.connect(self._on_cancel_edit)
         self.save_btn.clicked.connect(self._on_save)
+        self.load_btn.clicked.connect(self._on_load)
         self.export_btn.clicked.connect(self._on_export)
         self.name_edit.textChanged.connect(self._on_name_changed)
         self.table.cellDoubleClicked.connect(self._on_row_double_clicked)
+        self.manage_rates_btn.clicked.connect(self._on_manage_rates)
 
     # ── 槽函数 ────────────────────────────────────────
 
@@ -189,12 +202,13 @@ class MainWindow(QWidget):
         if class_type not in CLASS_RATES:
             reply = QMessageBox.question(
                 self, "新班级类型",
-                f"「{class_type}」不在预设费率中，当前默认时薪 {rec.rate} 元/时。\n"
-                f"是否将此班级类型添加到配置？（需要修改 config.py）",
+                f"「{class_type}」不在费率表中，当前按默认时薪 {rec.rate} 元/时计算。\n"
+                f"是否打开费率管理界面添加此班级？",
             )
             if reply == QMessageBox.StandardButton.Yes:
-                CLASS_RATES[class_type] = CLASS_RATES.get(class_type, rec.rate)
-                self.class_combo.addItem(class_type)
+                CLASS_RATES[class_type] = rec.rate
+                save_rates(CLASS_RATES)
+                self._refresh_class_combo()
 
     def _on_delete(self):
         rows = set(idx.row() for idx in self.table.selectedIndexes())
@@ -249,6 +263,35 @@ class MainWindow(QWidget):
     def _on_cancel_edit(self):
         self._exit_edit_mode()
 
+    # ── 费率管理 ──────────────────────────────────────
+
+    def _load_persisted_rates(self):
+        persisted = load_rates()
+        if persisted:
+            CLASS_RATES.clear()
+            CLASS_RATES.update(persisted)
+        self._refresh_class_combo()
+
+    def _on_manage_rates(self):
+        dialog = RateDialog(CLASS_RATES, self)
+        if dialog.exec() == RateDialog.DialogCode.Accepted:
+            new_rates = dialog.rates
+            if new_rates is not None:
+                CLASS_RATES.clear()
+                CLASS_RATES.update(new_rates)
+                save_rates(CLASS_RATES)
+                self._refresh_class_combo()
+                self._refresh_table()
+
+    def _refresh_class_combo(self):
+        current_text = self.class_combo.currentText()
+        self.class_combo.blockSignals(True)
+        self.class_combo.clear()
+        self.class_combo.addItems(list(CLASS_RATES.keys()))
+        idx = self.class_combo.findText(current_text)
+        if idx >= 0:
+            self.class_combo.setCurrentIndex(idx)
+        self.class_combo.blockSignals(False)
 
     def _on_save(self):
         path, _ = QFileDialog.getSaveFileName(
@@ -259,6 +302,27 @@ class MainWindow(QWidget):
         self._data.teacher_name = self.name_edit.text().strip()
         save(path, self._data)
         self._current_file = path
+
+    def _on_load(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "加载历史数据", "", "JSON 文件 (*.json)",
+        )
+        if not path:
+            return
+
+        if self._data.records:
+            reply = QMessageBox.question(
+                self, "确认加载",
+                f"当前有 {len(self._data.records)} 条未保存记录，加载将覆盖现有数据。\n是否继续？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+        self._data = load(path)
+        self._current_file = path
+        self.name_edit.setText(self._data.teacher_name)
+        self._refresh_table()
 
     def _on_export(self):
         if not self._data.records:
