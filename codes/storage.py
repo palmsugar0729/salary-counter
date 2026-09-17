@@ -16,6 +16,7 @@ def _record_to_dict(r: Record) -> dict:
         "start_time": r.start_time.isoformat(),
         "hours": r.hours,
         "class_type": r.class_type,
+        "class_name": r.class_name,
         "note": r.note,
     }
 
@@ -28,6 +29,7 @@ def _record_from_dict(d: dict) -> Record:
         start_time=time.fromisoformat(d["start_time"]),
         hours=d["hours"],
         class_type=d["class_type"],
+        class_name=d.get("class_name", ""),
         note=d.get("note", ""),
     )
 

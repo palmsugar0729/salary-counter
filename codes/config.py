@@ -20,14 +20,18 @@ WEEKDAY_NAMES: dict[int, str] = {
     6: "日",
 }
 
-# 同班级同色用的背景色调色板
+# 同班级同色用的背景色调色板（12 色，色相/明暗拉开，避免相似度过高）
 COLOR_PALETTE: list[str] = [
-    "FFD4E6F1",
-    "FFD5F5E3",
-    "FFFDEBD0",
-    "FFE8DAEF",
-    "FFFADBD8",
-    "FFD1F2EB",
-    "FFFCF3CF",
-    "FFD6EAF8",
+    "FFF5B7B1",  # 浅红
+    "FFAED6F1",  # 浅蓝
+    "FFA9DFBF",  # 浅绿
+    "FFD7BDE2",  # 浅紫
+    "FFF9E79F",  # 浅黄
+    "FFEDBB99",  # 浅橙
+    "FFA3E4D7",  # 浅青
+    "FFF1948A",  # 珊瑚红（较饱和）
+    "FF85C1E9",  # 中蓝（较饱和）
+    "FF82E0AA",  # 中绿（较饱和）
+    "FFC39BD3",  # 中紫（较饱和）
+    "FFF4D03F",  # 金黄（较饱和）
 ]

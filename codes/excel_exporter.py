@@ -9,7 +9,7 @@ from openpyxl.workbook import Workbook
 from config import COLOR_PALETTE
 from models import MonthData
 
-# A~J 共10列（去掉了原来无意义的 F 空列）
+# A~J 共10列（班级名不导出，仅用于配色；去掉了原来无意义的空列）
 HEADERS = [
     "日期", "星期", "时间", "小时数", "时薪（元/时）",
     "薪酬", "合计时数（小时）", "合计薪酬（元）", "班级", "备注",
@@ -130,9 +130,9 @@ def _write_record_row(ws, row: int, rec, fill: PatternFill) -> None:
     f_cell.value = f"=D{row}*E{row}"
 
 
-def _build_groups(records: list) -> list[tuple]:
-    """按排序后的首次出现顺序提取 group_key，保持时间顺序。"""
-    seen = []
+def _build_groups(records: list) -> list[str]:
+    """按排序后的首次出现顺序提取班级名，保持时间顺序。"""
+    seen: list[str] = []
     for rec in records:
         if rec.group_key not in seen:
             seen.append(rec.group_key)

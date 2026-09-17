@@ -12,6 +12,7 @@ class Record:
     start_time: time
     hours: float
     class_type: str
+    class_name: str
     note: str = ""
 
     @property
@@ -27,9 +28,9 @@ class Record:
         return round(self.hours * self.rate, 2)
 
     @property
-    def group_key(self) -> tuple:
-        """用于颜色分组：班级类型 + 星期 + 开始时间 三项完全一致才算同一组。"""
-        return (self.class_type, self.weekday_str, self.start_time)
+    def group_key(self) -> str:
+        """用于颜色分组：按班级名分组，同班级名同色。"""
+        return self.class_name
 
 
 @dataclass

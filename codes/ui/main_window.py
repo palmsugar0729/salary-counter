@@ -33,11 +33,13 @@ class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("工资结算表生成器")
-        self.resize(1100, 600)
+        self.resize(1260, 600)
 
         self._data = MonthData()
         self._current_file: str | None = None
         self._editing_index: int | None = None  # None=新增模式，数字=编辑对应行
+        self._filter_month: tuple[int, int] | None = None  # None=全部，否则 (年, 月)
+        self._filter_data: list = [None]  # 筛选下拉数据，索引 0 = 全部
 
         self._setup_ui()
         self._connect_signals()
@@ -50,9 +52,10 @@ class MainWindow(QWidget):
 
         # 输入区域
         form = QHBoxLayout()
+        form.setSpacing(6)
         form.addWidget(QLabel("教师姓名"))
         self.name_edit = QLineEdit()
-        self.name_edit.setMaximumWidth(100)
+        self.name_edit.setMaximumWidth(80)
         self.name_edit.setPlaceholderText("姓氏")
         form.addWidget(self.name_edit)
 
@@ -75,9 +78,17 @@ class MainWindow(QWidget):
         self.hours_spin.setDecimals(1)
         form.addWidget(self.hours_spin)
 
-        form.addWidget(QLabel("班级"))
+        form.addWidget(QLabel("班级名"))
+        self.class_name_combo = QComboBox()
+        self.class_name_combo.setEditable(True)
+        self.class_name_combo.setPlaceholderText("必填")
+        self.class_name_combo.setMaximumWidth(140)
+        form.addWidget(self.class_name_combo)
+
+        form.addWidget(QLabel("班级类型"))
         self.class_combo = QComboBox()
         self.class_combo.setEditable(True)
+        self.class_combo.setMaximumWidth(90)
         self.class_combo.addItems(list(CLASS_RATES.keys()))
         form.addWidget(self.class_combo)
 
@@ -91,6 +102,7 @@ class MainWindow(QWidget):
         self.note_edit.setMaximumWidth(120)
         form.addWidget(self.note_edit)
 
+        form.addStretch(1)
         root.addLayout(form)
 
         # 按钮行
@@ -132,12 +144,21 @@ class MainWindow(QWidget):
 
         root.addLayout(btn_row)
 
+        # 筛选行
+        filter_row = QHBoxLayout()
+        filter_row.addWidget(QLabel("日期筛选"))
+        self.filter_combo = QComboBox()
+        self.filter_combo.addItem("全部")
+        filter_row.addWidget(self.filter_combo)
+        filter_row.addStretch()
+        root.addLayout(filter_row)
+
         # 预览表格
         self.table = QTableWidget()
-        self.table.setColumnCount(10)
+        self.table.setColumnCount(11)
         self.table.setHorizontalHeaderLabels([
             "日期", "星期", "时间", "小时数", "时薪（元/时）",
-            "薪酬", "合计时数", "合计薪酬", "班级", "备注",
+            "薪酬", "合计时数", "合计薪酬", "班级名", "班级类型", "备注",
         ])
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -169,6 +190,7 @@ class MainWindow(QWidget):
         self.name_edit.textChanged.connect(self._on_name_changed)
         self.table.cellDoubleClicked.connect(self._on_row_double_clicked)
         self.manage_rates_btn.clicked.connect(self._on_manage_rates)
+        self.filter_combo.currentIndexChanged.connect(self._on_filter_changed)
 
     # ── 槽函数 ────────────────────────────────────────
 
@@ -178,6 +200,11 @@ class MainWindow(QWidget):
             QMessageBox.warning(self, "提示", "请选择或输入班级类型。")
             return
 
+        class_name = self.class_name_combo.currentText().strip()
+        if not class_name:
+            QMessageBox.warning(self, "提示", "请输入班级名。")
+            return
+
         qdate = self.date_edit.date()
         qtime = self.time_edit.time()
         rec = Record(
@@ -185,6 +212,7 @@ class MainWindow(QWidget):
             start_time=time(qtime.hour(), qtime.minute()),
             hours=self.hours_spin.value(),
             class_type=class_type,
+            class_name=class_name,
             note=self.note_edit.text().strip(),
         )
 
@@ -214,9 +242,9 @@ class MainWindow(QWidget):
         rows = set(idx.row() for idx in self.table.selectedIndexes())
         if not rows:
             return
-        sorted_recs = self._data.sorted_records()
+        visible = self._visible_records()
         for row in sorted(rows, reverse=True):
-            rec = sorted_recs[row]
+            rec = visible[row]
             try:
                 self._data.records.remove(rec)
             except ValueError:
@@ -236,9 +264,10 @@ class MainWindow(QWidget):
             self._refresh_table()
 
     def _on_row_double_clicked(self, row: int, _col: int):
-        if row < 0 or row >= len(self._data.records):
+        visible = self._visible_records()
+        if row < 0 or row >= len(visible):
             return
-        rec = self._data.sorted_records()[row]
+        rec = visible[row]
         try:
             self._editing_index = self._data.records.index(rec)
         except ValueError:
@@ -247,6 +276,7 @@ class MainWindow(QWidget):
         self.date_edit.setDate(rec.date)
         self.time_edit.setTime(rec.start_time)
         self.hours_spin.setValue(rec.hours)
+        self.class_name_combo.setEditText(rec.class_name)
         self.class_combo.setEditText(rec.class_type)
         self.note_edit.setText(rec.note)
 
@@ -328,6 +358,10 @@ class MainWindow(QWidget):
         if not self._data.records:
             QMessageBox.warning(self, "提示", "请先添加至少一条上课记录。")
             return
+        visible = self._visible_records()
+        if not visible:
+            QMessageBox.warning(self, "提示", "当前筛选范围内没有记录，请调整日期筛选。")
+            return
         teacher = self.name_edit.text().strip()
         if not teacher:
             QMessageBox.warning(self, "提示", "请输入教师姓名。")
@@ -339,16 +373,59 @@ class MainWindow(QWidget):
         )
         if not path:
             return
-        export(path, self._data)
+        export(path, MonthData(teacher_name=teacher, records=visible))
         QMessageBox.information(self, "完成", f"已导出至：\n{path}")
 
     def _on_name_changed(self, text: str):
         self._data.teacher_name = text.strip()
 
+    # ── 筛选 ──────────────────────────────────────
+
+    def _visible_records(self):
+        """返回当前筛选条件下要显示的记录（已按日期排序）。"""
+        records = self._data.sorted_records()
+        if self._filter_month is None:
+            return records
+        y, m = self._filter_month
+        return [r for r in records if r.date.year == y and r.date.month == m]
+
+    def _on_filter_changed(self):
+        idx = self.filter_combo.currentIndex()
+        self._filter_month = self._filter_data[idx] if idx > 0 else None
+        self._refresh_table()
+
+    def _refresh_filter_combo(self):
+        months = sorted({(r.date.year, r.date.month) for r in self._data.records}, reverse=True)
+        self._filter_data = [None] + months
+
+        self.filter_combo.blockSignals(True)
+        self.filter_combo.clear()
+        self.filter_combo.addItem("全部")
+        for (y, m) in months:
+            self.filter_combo.addItem(f"{y}年{m}月")
+        if self._filter_month in months:
+            self.filter_combo.setCurrentIndex(months.index(self._filter_month) + 1)
+        else:
+            self.filter_combo.setCurrentIndex(0)
+            self._filter_month = None
+        self.filter_combo.blockSignals(False)
+
+    def _refresh_class_name_combo(self):
+        names = sorted({r.class_name for r in self._data.records if r.class_name})
+        current = self.class_name_combo.currentText()
+        self.class_name_combo.blockSignals(True)
+        self.class_name_combo.clear()
+        self.class_name_combo.addItems(names)
+        self.class_name_combo.setEditText(current)
+        self.class_name_combo.blockSignals(False)
+
     # ── 表格刷新 ──────────────────────────────────────
 
     def _refresh_table(self):
-        records = self._data.sorted_records()
+        self._refresh_filter_combo()
+        self._refresh_class_name_combo()
+
+        records = self._visible_records()
         self.table.setRowCount(len(records))
         for row, rec in enumerate(records):
             items = [
@@ -360,6 +437,7 @@ class MainWindow(QWidget):
                 QTableWidgetItem(str(rec.salary)),
                 QTableWidgetItem(""),  # 合计时数（数据行留空）
                 QTableWidgetItem(""),  # 合计薪酬（数据行留空）
+                QTableWidgetItem(rec.class_name),
                 QTableWidgetItem(rec.class_type),
                 QTableWidgetItem(rec.note),
             ]
@@ -367,8 +445,10 @@ class MainWindow(QWidget):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.table.setItem(row, col, item)
 
-        self.total_hours_label.setText(f"合计时数：{self._data.total_hours}")
-        self.total_salary_label.setText(f"合计薪酬：{self._data.total_salary} 元")
+        total_hours = round(sum(r.hours for r in records), 2)
+        total_salary = round(sum(r.salary for r in records), 2)
+        self.total_hours_label.setText(f"合计时数：{total_hours}")
+        self.total_salary_label.setText(f"合计薪酬：{total_salary} 元")
 
     # ── 窗口关闭 ──────────────────────────────────────
 
