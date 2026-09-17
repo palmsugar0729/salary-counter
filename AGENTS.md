@@ -80,6 +80,8 @@ python -m PyInstaller --onefile --windowed --name SalaryCounter-vX.X main.py
 - `docs/2026-05-31-需求讨论记录.md` — 完整需求讨论，含 Excel 格式解析
 - `docs/PRD.md` — 产品需求文档
 - `docs/2026-06-01-会话记录-v0.1.1改进.md` — v0.1.1 改进全程记录
+- `docs/2026-09-13-需求讨论记录-v0.3.md` — v0.3 需求讨论
+- `docs/后端方案设计.md` — 后端方案草案（FastAPI + SQLite + uniapp），待评审
 - `assets/design/screenshot_original-effect.png` — 目标效果图
 - `assets/reference/2026沐晨_4月工资结算表-梁筱.xlsx` — 参考 Excel 文件
 - `notes/pyinstaller-packaging.md` — PyInstaller 打包学习笔记
